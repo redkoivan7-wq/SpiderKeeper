@@ -1,4 +1,5 @@
 import { species } from './catalog.js';
+import { labels, ru } from './strings.js';
 
 const paths = {
   home: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',
@@ -54,7 +55,7 @@ export const eventTypes = [
   'Уборка террариума', 'Температура', 'Влажность', 'Заметка'
 ];
 export const eventLabel = type => type === 'Вода' ? 'Замена воды' : type === 'Заметка' ? 'Наблюдение' : type;
-export const sexLabels = { male: 'Самец', female: 'Самка', unknown: 'Пол неизвестен' };
+export const sexLabels = labels.sex;
 const dateFormat = new Intl.DateTimeFormat('ru', { dateStyle: 'medium' });
 const monthFormat = new Intl.DateTimeFormat('ru', { month: 'long', year: 'numeric' });
 const timestampFormat = new Intl.DateTimeFormat('ru', { dateStyle: 'medium', timeStyle: 'short' });
@@ -87,15 +88,16 @@ export function heading(title, description, actions) {
 }
 
 const nameOf = (data, id) => data.pets.find(pet => pet.id === id)?.name || 'Паук';
-function eventList(items, data) {
+export function eventList(items, data, edit) {
   return items.length ? h('ul', { class: 'items' }, items.map(item =>
     h('li', {},
       h('span', { class: 'item-icon' }, icon(item.type === 'Линька' ? 'molt' : item.type === 'Кормление' ? 'feed' : 'journal')),
       h('div', { class: 'item-content' },
         h('strong', {}, eventLabel(item.type)),
         h('small', {}, dated(item) + ' · ' + nameOf(data, item.petId)),
-        item.detail && h('p', {}, item.detail), item.note && h('p', {}, item.note)
-      )
+        item.detail && h('p', {}, item.detail), item.sign && h('p', {}, item.sign), item.note && h('p', {}, item.note)
+      ),
+      edit && button('Изменить', () => edit(item))
     ))) : empty('Записей пока нет.');
 }
 function reminderList(items, data, actions) {
@@ -116,12 +118,12 @@ function reminderList(items, data, actions) {
 }
 const pending = items => [...items].filter(item => !item.done).sort((a, b) => order(a).localeCompare(order(b)));
 
-function panel(title, body, action) {
+export function panel(title, body, action) {
   return h('section', { class: 'panel' },
     h('div', { class: 'section-head' }, h('h2', {}, title), action), body);
 }
 
-export function homeView(data, actions) {
+export function homeView(data, actions, terrariumSummary) {
   const events = recent(data.events);
   const feeding = recent(data.pets.map(pet => lastEvent(data, pet, 'Кормление')).filter(Boolean))[0];
   const molt = recent(data.pets.map(pet => lastEvent(data, pet, 'Линька')).filter(Boolean))[0];
@@ -136,14 +138,21 @@ export function homeView(data, actions) {
         button('Записать уход', actions.addEvent, 'secondary', 'plus'))));
   return [
     hero,
+    h('div', { class: 'actions home-shortcuts' },
+      button('Кормление', () => actions.addEvent(undefined, ru.feeding), 'primary', 'plus'),
+      button(ru.measurement, actions.measure, 'secondary', 'plus'),
+      link(ru.analytics, 'analytics'), link(ru.feeds, 'feeds')),
     h('div', { class: 'stats' },
-      stat('Питомцы', 'spider', String(data.pets.length), 'Карточек в коллекции'),
+      stat('Питомцы', 'spider', String(data.pets.filter(pet => !pet.archived).length), 'Активных · террариумов ' + data.terraria.length),
       stat('Последнее кормление', 'feed', displayDate(feeding?.date), feeding ? nameOf(data, feeding.petId) : 'Ожидает записи'),
       stat('Последняя линька', 'molt', displayDate(molt?.date), molt ? nameOf(data, molt.petId) : 'Ожидает записи')),
     h('div', { class: 'two-up' },
       panel('Последние события', eventList(events.slice(0, 4), data), link('Весь дневник', 'care', 'quiet', 'arrow')),
       panel('Ближайшие напоминания', reminderList(pending(data.reminders).slice(0, 4), data),
         button('Добавить', actions.addReminder, 'quiet', 'plus'))),
+    h('details', { class: 'panel home-molts' }, h('summary', {}, 'Последние линьки питомцев'),
+      eventList(recent(data.pets.map(pet => lastEvent(data, pet, ru.molt)).filter(Boolean)).slice(0, 5), data)),
+    panel(ru.terraria, terrariumSummary, link('Все террариумы', 'terraria', 'quiet', 'arrow')),
     h('section', { class: 'panel play-callout' },
       h('div', { class: 'item-icon' }, icon('game')),
       h('div', {}, h('h2', {}, 'Охота паука'), muted('Поймайте насекомых в виртуальном террариуме.')),
@@ -151,59 +160,15 @@ export function homeView(data, actions) {
   ];
 }
 
-const detail = (title, value) => h('div', {}, h('dt', {}, title), h('dd', {}, value || '—'));
 const sourceLink = item => h('a', { href: item.source, target: '_blank', rel: 'noopener noreferrer' },
   'World Spider Catalog', icon('external'));
 
-export function petsView(data, photos, actions) {
-  const cards = data.pets.map(pet => {
-    const blob = photos.get(pet.photoId);
-    const art = h('div', { class: 'pet-art' }, icon('spider'));
-    if (blob) {
-      const img = h('img', { src: blob, alt: 'Фото питомца ' + pet.name, loading: 'lazy' });
-      img.addEventListener('error', () => {
-        img.remove();
-        art.append(h('small', { class: 'image-error' }, 'Формат фото недоступен в этом браузере.'));
-      }, { once: true });
-      art.append(img);
-    }
-    const match = species.find(item => item.scientific.toLowerCase() === pet.scientific.trim().toLowerCase());
-    return h('article', { class: 'pet-card' }, art,
-      h('div', { class: 'pet-body' },
-        h('div', { class: 'section-head' }, h('h2', {}, pet.name),
-          button('Изменить', () => actions.editPet(pet))),
-        pet.scientific && h('p', { class: 'scientific' }, h('i', {}, pet.scientific)),
-        pet.species && muted(pet.species),
-        h('div', { class: 'tags' }, h('span', {}, sexLabels[pet.sex]),
-          pet.stage && h('span', {}, pet.stage), pet.size && h('span', {}, pet.size)),
-        h('dl', { class: 'pet-details' },
-          detail('Приобретён', displayDate(pet.acquired)),
-          detail('Линька', displayDate(lastEvent(data, pet, 'Линька')?.date)),
-          detail('Кормление', displayDate(lastEvent(data, pet, 'Кормление')?.date))),
-        pet.notes && h('p', { class: 'note' }, pet.notes),
-        match && h('p', { class: 'species-link' }, sourceLink(match)),
-        h('div', { class: 'actions' },
-          button('Кормление', () => actions.addEvent(pet.id, 'Кормление'), 'secondary'),
-          button('Линька', () => actions.addEvent(pet.id, 'Линька'), 'secondary')),
-        h('details', {}, h('summary', {}, 'История изменений'),
-          pet.history.length
-            ? h('ul', { class: 'change-history' }, [...pet.history].reverse().map(change =>
-              h('li', {}, h('strong', {}, displayStamp(change.at)), muted(change.fields.join(', ')),
-                (change.values || []).map(value =>
-                  h('p', { class: 'muted' }, value.label + ' · ' + value.before + ' → ' + value.after)))))
-            : muted('Изменений пока нет.'))
-      ));
-  });
-  const catalog = panel('Справочник видов', h('div', { class: 'species-grid' }, species.map(item =>
+export function catalogView() {
+  return panel('Справочник видов', h('div', { class: 'species-grid' }, species.map(item =>
     h('details', { class: 'species-card' },
       h('summary', {}, h('strong', {}, item.name), h('i', {}, item.scientific)),
       h('p', { class: 'muted' }, 'Ареал · ' + item.range),
       h('p', {}, item.description), h('p', {}, sourceLink(item))))));
-  return [
-    heading('Мои пауки', 'Карточки питомцев и справочник видов', button('Добавить паука', () => actions.editPet(), 'primary', 'plus')),
-    cards.length ? h('div', { class: 'pet-grid' }, cards) : h('div', { class: 'panel' }, empty('Добавьте первого питомца.')),
-    catalog
-  ];
 }
 
 export function calendarView(date, day, events, reminders, onMonth, onDay) {
@@ -253,7 +218,7 @@ export function careView(data, actions, filters) {
     h('div', { class: 'care-grid' },
       calendarView(filters.month, filters.day, events, reminders, actions.changeMonth, actions.filterDay),
       h('div', { class: 'stack' },
-        panel(filters.day ? displayDate(filters.day) : 'История ухода', eventList(events.filter(datedFilter), data), select),
+        panel(filters.day ? displayDate(filters.day) : 'История ухода', eventList(events.filter(datedFilter), data, actions.editEvent), select),
         panel('Напоминания', reminderList(visible, data, actions)))
     )
   ];

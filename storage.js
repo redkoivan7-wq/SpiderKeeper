@@ -1,6 +1,7 @@
+import { migrate, mergeCollections, photoKeys, validate } from './model.js';
 export const LEGACY_KEY = 'spiderkeeper_v1';
 export const BACKUP_FORMAT = 'spiderkeeper';
-export const SCHEMA = 2;
+export const SCHEMA = 3;
 export const MAX_PHOTO = 20 * 1024 * 1024;
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'image/heic', 'image/heif']);
 const DEFAULTS = { motion: true };
@@ -73,20 +74,40 @@ export function normalize(raw, modern = false) {
 
 export function readLegacy() {
   const saved = localStorage.getItem(LEGACY_KEY);
-  return saved === null ? normalize({ pets: [], events: [] }) : normalize(JSON.parse(saved));
+  return migrate(saved === null ? normalize({ pets: [], events: [] }) : normalize(JSON.parse(saved)));
 }
 
 function openDatabase() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open('spiderkeeper', 1);
-    request.onupgradeneeded = () => {
-      request.result.createObjectStore('journal');
-      request.result.createObjectStore('photos');
+    if (!globalThis.indexedDB) throw new Error('В этом браузере IndexedDB недоступна.');
+    const request = indexedDB.open('spiderkeeper', 2);
+    let blocked = false;
+    let upgradeError;
+    request.onupgradeneeded = event => {
+      const db = request.result;
+      if (event.oldVersion === 0) {
+        db.createObjectStore('journal');
+        db.createObjectStore('photos');
+      }
+      const journal = request.transaction.objectStore('journal');
+      const saved = journal.get('data');
+      saved.onsuccess = () => {
+        if (!saved.result) return;
+        try { journal.put(migrate(saved.result), 'data'); }
+        catch (error) {
+          upgradeError = error;
+          request.transaction.abort();
+        }
+      };
     };
-    request.onerror = () => reject(request.error);
-    request.onblocked = () => reject(new Error('Закройте другие окна SpiderKeeper и обновите страницу.'));
+    request.onerror = () => reject(upgradeError || request.error);
+    request.onblocked = () => {
+      blocked = true;
+      reject(new Error('Закройте другие окна SpiderKeeper и обновите страницу.'));
+    };
     request.onsuccess = () => {
       const db = request.result;
+      if (blocked) return db.close();
       db.onversionchange = () => db.close();
       resolve(db);
     };
@@ -118,9 +139,12 @@ export async function openJournal() {
   const change = mutate => transaction(db, 'readwrite', (journal, photos, result, run) => {
     const request = journal.get('data');
     request.onsuccess = () => run(() => {
-      const data = request.result || readLegacy();
-      mutate?.(data, photos);
-      journal.put(data, 'data');
+      const data = request.result ? migrate(request.result) : readLegacy();
+      if (mutate) {
+        mutate(data, photos);
+        validate(data);
+      }
+      if (mutate || request.result?.schema !== SCHEMA) journal.put(data, 'data');
       result(data);
     });
   });
@@ -132,6 +156,18 @@ export async function openJournal() {
   }
   return {
     change,
+    read() {
+      return transaction(db, 'readonly', (journal, _photos, result) => {
+        const request = journal.get('data');
+        request.onsuccess = () => result(request.result);
+      });
+    },
+    file(key) {
+      return transaction(db, 'readonly', (_journal, photos, result) => {
+        const request = photos.get(key);
+        request.onsuccess = () => result(request.result);
+      });
+    },
     async snapshot() {
       return transaction(db, 'readonly', (journal, photos, result, run) => {
         const data = journal.get('data');
@@ -151,6 +187,37 @@ export function validatePhoto(blob) {
   }
 }
 
+export async function decodePhoto(blob, probeOnly = false) {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      return await createImageBitmap(blob, probeOnly ? { resizeWidth: 2, resizeHeight: 2 } : {});
+    } catch { /* Safari may support a format only in img. */ }
+  }
+  const url = URL.createObjectURL(blob);
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    return image;
+  } finally { URL.revokeObjectURL(url); }
+}
+
+export async function inspectPhoto(blob) {
+  validatePhoto(blob);
+  const bytes = new Uint8Array(await blob.slice(0, 40).arrayBuffer());
+  const ascii = (start, end) => String.fromCharCode(...bytes.slice(start, end));
+  const signature = {
+    'image/jpeg': () => bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255,
+    'image/png': () => [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => bytes[i] === byte),
+    'image/gif': () => /^GIF8[79]a$/.test(ascii(0, 6)),
+    'image/webp': () => ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP',
+    'image/avif': () => ascii(4, 8) === 'ftyp' && /avif|avis/.test(ascii(8, 40)),
+    'image/heic': () => ascii(4, 8) === 'ftyp' && /heic|heix|hevc|hevx|mif1|msf1/.test(ascii(8, 40)),
+    'image/heif': () => ascii(4, 8) === 'ftyp' && /heic|heix|hevc|hevx|mif1|msf1/.test(ascii(8, 40))
+  };
+  if (!signature[blob.type]()) throw new Error('Содержимое файла не соответствует формату изображения.');
+}
+
 export async function photoKey(blob) {
   validatePhoto(blob);
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()));
@@ -167,10 +234,15 @@ function toDataURL(blob) {
 }
 
 export async function createBackup(snapshot, record) {
-  const photos = await Promise.all([...snapshot.photos].map(async ([id, blob]) => [id, await toDataURL(blob)]));
+  const photos = [];
+  for (const id of photoKeys(snapshot.data)) {
+    const blob = snapshot.photos.get(id);
+    if (!blob) throw new Error('Не удалось прочитать все фотографии коллекции.');
+    photos.push([id, await toDataURL(blob)]);
+  }
   return JSON.stringify({
     format: BACKUP_FORMAT, version: SCHEMA, exportedAt: new Date().toISOString(),
-    ...snapshot.data, photos, record
+    ...snapshot.data, photos, record: Math.max(record, snapshot.data.gameRecord || 0)
   }, null, 2);
 }
 
@@ -178,10 +250,16 @@ export function parseBackup(text) {
   const raw = JSON.parse(text);
   if (!object(raw)) throw new Error('Некорректный файл резервной копии.');
   const modern = Object.hasOwn(raw, 'format');
-  if (modern && (raw.format !== BACKUP_FORMAT || raw.version !== SCHEMA || !Array.isArray(raw.photos))) {
+  if (modern && (raw.format !== BACKUP_FORMAT || ![2, SCHEMA].includes(raw.version) || !Array.isArray(raw.photos))) {
     throw new Error('Эта версия резервной копии не поддерживается.');
   }
-  const data = normalize(raw, modern);
+  const current = modern && raw.version === SCHEMA;
+  const { photos: _files, format: _name, version: _version, exportedAt: _exported, record: _record, ...content } = raw;
+  const data = current ? { ...content, schema: SCHEMA } : migrate(normalize(raw, modern));
+  if (current && (!object(data.settings) || (data.settings.motion !== undefined && typeof data.settings.motion !== 'boolean') ||
+      (data.gameRecord !== undefined && (!Number.isSafeInteger(data.gameRecord) || data.gameRecord < 0)))) {
+    throw new Error('Повреждены настройки или рекорд.');
+  }
   const photos = new Map();
   for (const pair of modern ? raw.photos : []) {
     if (!Array.isArray(pair) || pair.length !== 2 || !validId(pair[0]) || typeof pair[1] !== 'string') {
@@ -197,53 +275,30 @@ export function parseBackup(text) {
     validatePhoto(blob);
     photos.set(String(id), blob);
   }
-  if (data.pets.some(pet => pet.photoId && !photos.has(pet.photoId))) {
-    throw new Error('В копии отсутствует фотография одной из карточек.');
-  }
+  validate(data, photos);
   return {
     data, photos, modern,
     record: modern && Number.isSafeInteger(raw.record) && raw.record >= 0 ? raw.record : 0
   };
 }
 
-function mergeRows(existing, incoming, transform = item => item) {
-  const used = new Map(existing.map(item => [item.id, item]));
-  const remap = new Map();
-  for (const source of incoming) {
-    const item = transform({ ...source });
-    for (let index = 0; ; index++) {
-      const id = index ? source.id + ':import:' + index : source.id;
-      item.id = id;
-      const previous = used.get(id);
-      if (previous && JSON.stringify(previous) !== JSON.stringify(item)) continue;
-      if (!previous) {
-        existing.push(item);
-        used.set(id, item);
-      }
-      remap.set(source.id, id);
-      break;
-    }
-  }
-  return remap;
-}
-
-export function mergeBackup(current, incoming, photoIds) {
-  const petIds = mergeRows(current.pets, incoming.pets, pet => {
-    if (pet.photoId) pet.photoId = photoIds.get(pet.photoId);
-    return pet;
-  });
-  const remapPet = item => ({ ...item, petId: petIds.get(item.petId) ?? item.petId });
-  mergeRows(current.events, incoming.events, remapPet);
-  mergeRows(current.reminders, incoming.reminders, remapPet);
-}
-
 export async function storeBackup(journal, backup) {
-  const keys = new Map(await Promise.all([...backup.photos].map(async ([id, blob]) => [id, await photoKey(blob)])));
+  const keys = new Map();
+  for (const [id, blob] of backup.photos) {
+    await inspectPhoto(blob);
+    if (['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(blob.type)) {
+      try { (await decodePhoto(blob, true)).close?.(); }
+      catch { throw new Error('В копии есть повреждённое изображение.'); }
+    }
+    keys.set(id, await photoKey(blob));
+  }
   return journal.change((current, photoStore) => {
-    mergeBackup(current, backup.data, keys);
-    if (backup.modern) current.settings = backup.data.settings;
-    for (const pet of backup.data.pets) {
-      if (pet.photoId) photoStore.put(backup.photos.get(pet.photoId), keys.get(pet.photoId));
+    mergeCollections(current, backup.data, keys);
+    if (backup.modern) current.settings = { ...current.settings, ...backup.data.settings };
+    current.gameRecord = Math.max(current.gameRecord || 0, backup.record, backup.data.gameRecord || 0);
+    const referenced = photoKeys(current);
+    for (const [id, blob] of backup.photos) {
+      if (referenced.has(keys.get(id))) photoStore.put(blob, keys.get(id));
     }
   });
 }

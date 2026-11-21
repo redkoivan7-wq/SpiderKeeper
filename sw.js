@@ -1,9 +1,10 @@
-const PREFIX = 'spiderkeeper-stage002-';
+const PREFIX = 'spiderkeeper-stage003-';
 const CACHE = PREFIX + '1';
 const url = path => new URL(path, self.registration.scope).href;
 const entry = url('./');
 const shell = [
-  'index.html', 'styles.css', 'app.js', 'ui.js', 'storage.js', 'catalog.js', 'game.js', 'pwa.js',
+  'index.html', 'styles.css', 'collection.css', 'model.js', 'strings.js', 'collection.js',
+  'media.js', 'terraria.js', 'feed.js', 'analytics.js', 'care.js', 'app.js', 'ui.js', 'storage.js', 'catalog.js', 'game.js', 'pwa.js',
   'manifest.webmanifest', 'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png'
 ].map(url);
 
@@ -16,7 +17,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter(key => key.startsWith(PREFIX) && key !== CACHE)
+    await Promise.all(keys.filter(key => (key.startsWith(PREFIX) || key.startsWith('spiderkeeper-stage002-')) && key !== CACHE)
       .map(key => caches.delete(key)));
     await self.clients.claim();
   })());

@@ -1,0 +1,97 @@
+/* Collection, media and charts */
+#content > section > .button { justify-self: start }
+.home-shortcuts, .period-content { margin-top: .65rem }
+.home-shortcuts { margin-top: 0 }
+.home-terra, .collection-results, .album-grid { display: grid; gap: .85rem; min-width: 0 }
+.home-terra, .collection-results { grid-template-columns: repeat(auto-fit, minmax(min(100%, 248px), 1fr)) }
+.collection-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: .55rem }
+.collection-filters input, .collection-filters select { width: 100% }
+.collection-results.compact { grid-template-columns: minmax(0, 1fr) }
+.compact .collection-card { display: grid; grid-template-columns: minmax(72px, 118px) minmax(0, 1fr) }
+.compact .pet-art { min-height: 100%; aspect-ratio: auto }
+.compact .pet-body { padding: .8rem 1rem }
+.collection-card h2, .feed-tile h2, .facts dd { overflow-wrap: anywhere }
+.pet-art .media-slot { position: absolute; inset: 0 }
+.media-slot { min-height: 60px; width: 100%; overflow: hidden; background: #19241c }
+.media-slot img { width: 100%; height: 100%; display: block; object-fit: cover }
+.media-placeholder { display: grid; place-items: center; padding: .55rem; width: 100%; min-height: 60px;
+  color: var(--muted); font-size: .86rem; text-align: center; overflow-wrap: anywhere }
+.facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem 1rem; margin-block: .8rem }
+.facts dt { color: var(--muted); font-size: .85rem }
+.facts dd { margin: .1rem 0 0; white-space: pre-wrap }
+.history-entry + .history-entry { border-top: 1px solid var(--line); margin-top: .6rem; padding-top: .6rem }
+.album-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); margin-block: .8rem }
+.album-item { display: grid; grid-template-rows: auto auto minmax(1.2em, 1fr) auto; gap: .45rem;
+  border: 1px solid var(--line); border-radius: 14px; padding: .6rem; min-width: 0; overflow-wrap: anywhere }
+.album-item .photo-button { aspect-ratio: 1.5 }
+.photo-button { padding: 0; display: block; width: 100%; overflow: hidden; border-color: #435343;
+  text-align: center; border-radius: 11px; background: #17241b; position: relative; min-width: 0 }
+.photo-button > .media-slot { position: absolute; inset: 0; height: 100% }
+.cover-photo { aspect-ratio: 1.4; margin-top: .55rem }
+.current-cover { color: var(--green); font-size: .83rem }
+.compare-pair { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+.compare-photo { margin: 0 }
+.compare-photo .media-slot { margin-top: .6rem; min-height: 100px; aspect-ratio: 1.1; border-radius: 10px }
+.compare-photo img, .lightbox img { object-fit: contain }
+.lightbox { width: 100vw; max-width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0;
+  padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); }
+.lightbox .media-slot { height: min(76dvh, 85%); margin: .6rem auto; background: #101511 }
+.lightbox-head { display: flex; justify-content: space-between; align-items: center; gap: .6rem }
+.lightbox-head > h2 { min-width: 0; overflow-wrap: anywhere }
+.environment-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; margin-block: .6rem }
+.environment-reading { display: grid; align-content: start; gap: .12rem; min-width: 0; overflow-wrap: anywhere;
+  border: 1px solid var(--line); border-radius: 12px; background: #181f19; padding: .5rem .55rem }
+.environment-reading > strong { color: var(--green); font-size: 1rem }
+.environment-reading > span { color: var(--muted); font-size: .84rem }
+.environment-reading .range-alert { color: var(--amber); font-weight: 650 }
+.feed-tile { display: grid; gap: .6rem }
+.quantity { font-size: 1.45rem; color: var(--green) }
+.period-content > .stack { gap: .7rem }
+.period-content h3 { margin: 0 }
+.statistics-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr)) }
+.chart { margin: 0; min-width: 0; border: 1px solid var(--line); background: #161d17; border-radius: 12px; padding: .55rem }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible }
+.chart svg text { fill: var(--muted); font: 11px system-ui, sans-serif }
+.chart figcaption { font-weight: 700 }
+.chart-grid { stroke: #344435 }
+.chart-line { stroke: #a7cf86; stroke-width: 2; fill: none }
+.chart-boundary { stroke: #ebc786; stroke-dasharray: 4 4; opacity: .8 }
+.chart-hit { fill: transparent }
+.chart-dot { fill: #c3ec9f; stroke: #282f23; stroke-width: 1.2 }
+.chart-point { cursor: pointer }
+.chart-point.selected .chart-dot { fill: #ffd287; stroke-width: 2; r: 5.5 }
+.chart-tooltip { color: var(--amber); padding: .25rem .4rem; overflow-wrap: anywhere }
+.chart select { width: 100%; margin-top: .3rem }
+.form-subgroup { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem;
+  background: #19221a; border: 1px solid var(--line); border-radius: 12px; padding: .75rem; min-width: 0 }
+.form-subgroup .muted { grid-column: 1 / -1 }
+.attached-choices { min-width: 0; max-height: 180px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; margin: 0 }
+.attached-choices label { overflow-wrap: anywhere }
+#dialog { max-height: min(89dvh, var(--dialog-height, 89dvh)); overscroll-behavior: contain }
+#dialog .dialog-actions { position: sticky; bottom: -.01rem; padding-block: .4rem; border-top: 1px solid var(--line); background: #1a211b }
+.section-head { flex-wrap: wrap }
+.section-head > :last-child { min-width: 0; max-width: 100%; flex-shrink: 1 }
+.panel > .actions, .panel .facts + .actions { margin-top: .6rem }
+#status { position: fixed; z-index: 6; left: max(.65rem, env(safe-area-inset-left)); right: max(.65rem, env(safe-area-inset-right));
+  bottom: calc(3px + env(safe-area-inset-bottom)); width: fit-content; max-width: min(calc(100% - 1.3rem), 32rem); margin-inline: auto; pointer-events: none }
+@media (max-width: 800px) {
+  #status { bottom: calc(57px + env(safe-area-inset-bottom)) }
+  .compare-pair { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+}
+@media (max-width: 590px) {
+  .passport-panels > :last-child, .terrarium-panels > :last-child { grid-row: 1 }
+  .section-links { gap: .4rem }
+  .section-links > .button { padding-inline: .5rem; font-size: .9rem }
+}
+@media (max-width: 430px) {
+  .form-subgroup { grid-template-columns: minmax(0, 1fr) }
+  .facts { gap: .45rem .65rem }
+  .compact .collection-card { grid-template-columns: minmax(60px, 85px) minmax(0, 1fr) }
+  .compact .pet-body { padding: .55rem }
+  .compare-photo { padding: .55rem }
+  .compare-photo h2 { font-size: .93rem }
+  .collection-filters { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+  .collection-filters > input { grid-column: 1 / -1 }
+  .items > li:has(> button):not(:has(.item-icon)) { flex-wrap: wrap }
+  .chart svg text { font-size: 12px }
+}
