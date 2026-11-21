@@ -2,7 +2,7 @@
   "id": "./",
   "name": "SpiderKeeper — дневник пауков-птицеедов",
   "short_name": "SpiderKeeper",
-  "description": "Карточки пауков, дневник ухода и мини-игра",
+  "description": "Коллекция пауков, террариумы, уход и мини-игра",
   "lang": "ru",
   "start_url": "./",
   "scope": "./",
