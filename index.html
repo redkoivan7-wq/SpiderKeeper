@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#121b28">
+<title>SpiderKeeper</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#101823;color:#f2f5fa;font-family:Arial,sans-serif}
+header{background:#1b2838;text-align:center;padding:26px 15px}
+h1{color:#88e0b0;margin:0}
+header p,.small{color:#a5b4c5}
+main{max-width:700px;margin:auto;padding:20px}
+.card{background:#1d2b3b;border-radius:17px;padding:20px;margin:16px 0;border:1px solid #34475a}
+button{background:#8de1b1;color:#10251a;border:0;border-radius:10px;padding:12px;margin:5px;font-weight:bold;cursor:pointer}
+.secondary{background:#40546c;color:white}
+input{background:#142131;color:white;border:1px solid #60748a;border-radius:8px;padding:10px;width:100%;margin:7px 0}
+.event{border-bottom:1px solid #405065;padding:12px 0}
+.event:last-child{border:0}
+</style>
+</head>
+<body>
+<header>
+<h1>🕷️ SpiderKeeper</h1>
+<p>Дневник владельца пауков</p>
+</header>
+<main>
+<h2>Мои пауки</h2>
+<div id="pets"></div>
+<button onclick="addPet()">+ Добавить паука</button>
+<h2>История ухода</h2>
+<div class="card" id="history"></div>
+<button class="secondary" onclick="backup()">Резервная копия</button>
+</main>
+<script>
+const key="spiderkeeper_v1";
+let data;
+try{data=JSON.parse(localStorage.getItem(key))}catch(e){}
+if(!data||!Array.isArray(data.pets)){
+data={
+pets:[{id:1,name:"Джипи",species:"Никарагуа (вид уточняется)"}],
+events:[{petId:1,type:"Линька",date:"2026-11-08",note:"Последняя известная линька: 7–8 ноября"}]
+};
+}
+if(!Array.isArray(data.events))data.events=[];
+function safe(s){
+return String(s??"").replace(/[&<>"']/g,c=>({
+"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+})[c]);
+}
+function save(){
+localStorage.setItem(key,JSON.stringify(data));
+render();
+}
+function addPet(){
+let name=prompt("Имя паука");
+if(!name||!name.trim())return;
+let species=prompt("Вид паука")||"Не определён";
+data.pets.push({id:Date.now(),name:name.trim(),species});
+save();
+}
+function eventAdd(id,type){
+let date=new Date();
+let local=new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,10);
+let entered=prompt("Дата (ГГГГ-ММ-ДД)",local);
+if(!entered)return;
+if(!/^\d{4}-\d{2}-\d{2}$/.test(entered)){
+alert("Неверный формат даты");return;
+}
+let note=prompt("Комментарий")||"";
+data.events.unshift({petId:id,type,date:entered,note});
+save();
+}
+function backup(){
+let blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+let a=document.createElement("a");
+a.href=URL.createObjectURL(blob);
+a.download="SpiderKeeper-backup.json";
+a.click();
+setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function render(){
+document.getElementById("pets").innerHTML=data.pets.map(p=>`
+<div class="card">
+<h2>🕷️ ${safe(p.name)}</h2>
+<p class="small">${safe(p.species)}</p>
+<button onclick="eventAdd(${p.id},'Кормление')">Кормление</button>
+<button onclick="eventAdd(${p.id},'Линька')">Линька</button>
+<button class="secondary" onclick="eventAdd(${p.id},'Вода')">Вода</button>
+<button class="secondary" onclick="eventAdd(${p.id},'Заметка')">Заметка</button>
+</div>`).join("");
+document.getElementById("history").innerHTML=
+[...data.events].sort((a,b)=>b.date.localeCompare(a.date))
+.map(e=>`<div class="event">
+<strong>${safe(e.type)}</strong>
+<p class="small">${safe(e.date)} — ${safe(data.pets.find(p=>p.id===e.petId)?.name||"Паук")}</p>
+<p>${safe(e.note)}</p>
+</div>`).join("")||"Записей пока нет";
+}
+save();
+</script>
+</body>
+</html>
